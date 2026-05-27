@@ -1,0 +1,41 @@
+services:
+  mcp-guiri:
+    image: ghcr.io/nsoult-agentic/mcp-guiri:latest
+    container_name: mcp-guiri
+    restart: unless-stopped
+
+    # ── Network — host mode for mcp-nextcloud loopback access ──
+    # Binds to 0.0.0.0:8918 in http.ts for LAN access (Lucy's Mac Mini)
+    network_mode: host
+
+    # ── Security Hardening ──
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # ── Resource Limits ──
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
+
+    # ── Filesystem ──
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+
+    # ── Health Check ──
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:8918/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # ── Environment ──
+    environment:
+      - NODE_ENV=production
+      - PORT=8918
+      - NEXTCLOUD_MCP_URL=http://127.0.0.1:8902/mcp

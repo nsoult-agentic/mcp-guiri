@@ -6,6 +6,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { GUIRI_BASE_PATH } from "./style-guide.js";
+import { sanitizeSlug } from "./slug.js";
 
 const NEXTCLOUD_MCP_URL = process.env["NEXTCLOUD_MCP_URL"] || "http://127.0.0.1:8902/mcp";
 
@@ -34,7 +35,10 @@ async function callTool(toolName: string, args: Record<string, unknown>): Promis
 }
 
 /** Call a Nextcloud MCP tool and return raw content blocks (for images) */
-async function callToolRaw(toolName: string, args: Record<string, unknown>): Promise<Array<{ type: string; [key: string]: unknown }>> {
+async function callToolRaw(
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<Array<{ type: string; [key: string]: unknown }>> {
   const client = await createClient();
   try {
     const result = await client.callTool({ name: toolName, arguments: args });
@@ -45,17 +49,10 @@ async function callToolRaw(toolName: string, args: Record<string, unknown>): Pro
   }
 }
 
-/** Sanitize post slug to prevent path traversal */
-function sanitizeSlug(slug: string): string {
-  return slug.replace(/[/\\..]/g, "").replace(/\.\./g, "");
-}
-
 // ─── Public API ───
 
 export async function listPosts(city?: string): Promise<string> {
-  const path = city
-    ? `${GUIRI_BASE_PATH}/${sanitizeSlug(city)}`
-    : GUIRI_BASE_PATH;
+  const path = city ? `${GUIRI_BASE_PATH}/${sanitizeSlug(city)}` : GUIRI_BASE_PATH;
   return callTool("nextcloud-list", { path });
 }
 
@@ -64,12 +61,19 @@ export async function getFile(postSlug: string, filename: string): Promise<strin
   return callTool("nextcloud-download", { path });
 }
 
-export async function getFileRaw(postSlug: string, filename: string): Promise<Array<{ type: string; [key: string]: unknown }>> {
+export async function getFileRaw(
+  postSlug: string,
+  filename: string,
+): Promise<Array<{ type: string; [key: string]: unknown }>> {
   const path = `${GUIRI_BASE_PATH}/${sanitizeSlug(postSlug)}/${filename}`;
   return callToolRaw("nextcloud-download", { path });
 }
 
-export async function saveFile(postSlug: string, filename: string, content: string): Promise<string> {
+export async function saveFile(
+  postSlug: string,
+  filename: string,
+  content: string,
+): Promise<string> {
   const path = `${GUIRI_BASE_PATH}/${sanitizeSlug(postSlug)}/${filename}`;
   return callTool("nextcloud-upload", { path, content });
 }
@@ -82,14 +86,18 @@ export async function createFolder(postSlug: string): Promise<string> {
 /**
  * Get post metadata with fallback chain: post.json → notes.txt → not found.
  */
-export async function getPostInfo(postSlug: string): Promise<{ source: "json" | "text" | "none"; content: string }> {
+export async function getPostInfo(
+  postSlug: string,
+): Promise<{ source: "json" | "text" | "none"; content: string }> {
   // Try post.json first
   try {
     const json = await getFile(postSlug, "post.json");
     if (json && !json.includes("not found") && !json.includes("error")) {
       return { source: "json", content: json };
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
 
   // Try notes.txt
   try {
@@ -97,7 +105,13 @@ export async function getPostInfo(postSlug: string): Promise<{ source: "json" | 
     if (notes && !notes.includes("not found") && !notes.includes("error")) {
       return { source: "text", content: notes };
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
 
-  return { source: "none", content: "No post metadata found (no post.json or notes.txt). Ask the user for restaurant name, city, dishes ordered, and their experience." };
+  return {
+    source: "none",
+    content:
+      "No post metadata found (no post.json or notes.txt). Ask the user for restaurant name, city, dishes ordered, and their experience.",
+  };
 }

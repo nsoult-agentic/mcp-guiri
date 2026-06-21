@@ -21,14 +21,16 @@ import {
   saveFile,
   createFolder,
 } from "./nextcloud.js";
+import { KEBAB_CASE } from "./slug.js";
+import { formatUsage, totalCalls, track as trackCall, type UsageCounts } from "./usage.js";
 
 const PORT = Number(process.env["PORT"]) || 8918;
 
 // ─── API Usage Tracking ───
 
-const usage: Record<string, number> = {};
+const usage: UsageCounts = {};
 function track(tool: string): void {
-  usage[tool] = (usage[tool] ?? 0) + 1;
+  trackCall(usage, tool);
 }
 
 // ─── MCP Server Factory ───
@@ -59,10 +61,7 @@ function createServer(): McpServer {
     "guiri-list-posts",
     "List post folders in Nextcloud with their contents. Shows which posts have images, captions, and metadata files.",
     {
-      city: z
-        .string()
-        .optional()
-        .describe("Filter by city subfolder (optional)"),
+      city: z.string().optional().describe("Filter by city subfolder (optional)"),
     },
     async ({ city }) => {
       track("guiri-list-posts");
@@ -79,19 +78,17 @@ function createServer(): McpServer {
     "guiri-get-post-info",
     "Read post metadata from a post folder. Tries post.json first, falls back to notes.txt. If neither exists, returns guidance to ask the user for details.",
     {
-      postSlug: z
-        .string()
-        .min(1)
-        .describe("Post folder name (e.g., 'barcelona-cal-pep')"),
+      postSlug: z.string().min(1).describe("Post folder name (e.g., 'barcelona-cal-pep')"),
     },
     async ({ postSlug }) => {
       track("guiri-get-post-info");
       const info = await getPostInfo(postSlug);
-      const header = info.source === "json"
-        ? "Post info (from post.json):"
-        : info.source === "text"
-          ? "Post notes (from notes.txt — freeform, not structured):"
-          : "";
+      const header =
+        info.source === "json"
+          ? "Post info (from post.json):"
+          : info.source === "text"
+            ? "Post notes (from notes.txt — freeform, not structured):"
+            : "";
       return {
         content: [{ type: "text" as const, text: `${header}\n${info.content}`.trim() }],
       };
@@ -104,14 +101,8 @@ function createServer(): McpServer {
     "guiri-save-post-info",
     "Save post metadata to a post folder. Use format 'json' for structured data (post.json) or 'text' for freeform notes (notes.txt).",
     {
-      postSlug: z
-        .string()
-        .min(1)
-        .describe("Post folder name"),
-      info: z
-        .string()
-        .min(1)
-        .describe("Post metadata content — JSON object or freeform text"),
+      postSlug: z.string().min(1).describe("Post folder name"),
+      info: z.string().min(1).describe("Post metadata content — JSON object or freeform text"),
       format: z
         .enum(["json", "text"])
         .optional()
@@ -134,10 +125,7 @@ function createServer(): McpServer {
     "guiri-get-caption",
     "Read the existing caption from a post folder (caption.txt).",
     {
-      postSlug: z
-        .string()
-        .min(1)
-        .describe("Post folder name"),
+      postSlug: z.string().min(1).describe("Post folder name"),
     },
     async ({ postSlug }) => {
       track("guiri-get-caption");
@@ -160,20 +148,16 @@ function createServer(): McpServer {
     "guiri-save-caption",
     "Save a caption to a post folder as caption.txt. The caption should follow the style guide.",
     {
-      postSlug: z
-        .string()
-        .min(1)
-        .describe("Post folder name"),
-      caption: z
-        .string()
-        .min(10)
-        .describe("Full caption text including title, body, and hashtags"),
+      postSlug: z.string().min(1).describe("Post folder name"),
+      caption: z.string().min(10).describe("Full caption text including title, body, and hashtags"),
     },
     async ({ postSlug, caption }) => {
       track("guiri-save-caption");
       const result = await saveFile(postSlug, "caption.txt", caption);
       return {
-        content: [{ type: "text" as const, text: `Caption saved to ${postSlug}/caption.txt: ${result}` }],
+        content: [
+          { type: "text" as const, text: `Caption saved to ${postSlug}/caption.txt: ${result}` },
+        ],
       };
     },
   );
@@ -187,7 +171,7 @@ function createServer(): McpServer {
       postSlug: z
         .string()
         .min(1)
-        .regex(/^[a-z0-9-]+$/, "Must be kebab-case (lowercase letters, numbers, hyphens)")
+        .regex(KEBAB_CASE, "Must be kebab-case (lowercase letters, numbers, hyphens)")
         .describe("Post folder name to create"),
     },
     async ({ postSlug }) => {
@@ -205,14 +189,8 @@ function createServer(): McpServer {
     "guiri-get-photo",
     "Download a photo from a post folder. Returns the image so you can view it with vision and incorporate visual details into the caption.",
     {
-      postSlug: z
-        .string()
-        .min(1)
-        .describe("Post folder name"),
-      filename: z
-        .string()
-        .min(1)
-        .describe("Photo filename (e.g., 'img-01.jpg')"),
+      postSlug: z.string().min(1).describe("Post folder name"),
+      filename: z.string().min(1).describe("Photo filename (e.g., 'img-01.jpg')"),
     },
     async ({ postSlug, filename }) => {
       track("guiri-get-photo");
@@ -221,10 +199,16 @@ function createServer(): McpServer {
       // If mcp-nextcloud returned image content, pass it through
       // Otherwise return text indicating what happened
       if (blocks.length > 0) {
-        return { content: blocks as Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> };
+        return {
+          content: blocks as Array<
+            { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+          >,
+        };
       }
       return {
-        content: [{ type: "text" as const, text: `Could not retrieve ${filename} from ${postSlug}/` }],
+        content: [
+          { type: "text" as const, text: `Could not retrieve ${filename} from ${postSlug}/` },
+        ],
       };
     },
   );
@@ -237,12 +221,8 @@ function createServer(): McpServer {
     {},
     async () => {
       track("guiri-api-usage");
-      const lines = Object.entries(usage)
-        .sort(([, a], [, b]) => b - a)
-        .map(([tool, count]) => `${tool}: ${count}`)
-        .join("\n");
       return {
-        content: [{ type: "text" as const, text: lines || "No tool calls recorded yet." }],
+        content: [{ type: "text" as const, text: formatUsage(usage) }],
       };
     },
   );
@@ -265,7 +245,7 @@ const httpServer = Bun.serve({
           service: "mcp-guiri",
           version: "0.1.0",
           tools: 9,
-          calls: Object.values(usage).reduce((a, b) => a + b, 0),
+          calls: totalCalls(usage),
         }),
         { headers: { "Content-Type": "application/json" } },
       );

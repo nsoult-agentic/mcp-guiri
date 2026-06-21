@@ -1,6 +1,6 @@
 services:
   mcp-guiri:
-    image: ghcr.io/nsoult-agentic/mcp-guiri:sha-0347b65
+    image: ghcr.io/nsoult-agentic/mcp-guiri:sha-27899b4
     container_name: mcp-guiri
     restart: unless-stopped
 

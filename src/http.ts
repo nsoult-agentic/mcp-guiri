@@ -253,9 +253,11 @@ const httpServer = Bun.serve({
 
     if (url.pathname === "/mcp") {
       const server = createServer();
-      const transport = new WebStandardStreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-      });
+      // Omit sessionIdGenerator entirely to run in stateless mode: the transport
+      // treats an absent generator the same as `undefined` (each request gets a
+      // fresh transport, no session management). With exactOptionalPropertyTypes
+      // we cannot pass an explicit `undefined` for this `?: () => string` option.
+      const transport = new WebStandardStreamableHTTPServerTransport({});
       await server.connect(transport);
       return transport.handleRequest(req);
     }

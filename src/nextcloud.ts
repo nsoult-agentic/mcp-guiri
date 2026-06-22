@@ -14,6 +14,11 @@ const NEXTCLOUD_MCP_URL = process.env["NEXTCLOUD_MCP_URL"] || "http://127.0.0.1:
 async function createClient(): Promise<Client> {
   const client = new Client({ name: "mcp-guiri", version: "0.1.0" });
   const transport = new StreamableHTTPClientTransport(new URL(NEXTCLOUD_MCP_URL));
+  // @ts-expect-error — SDK type defect under exactOptionalPropertyTypes: the
+  // Transport interface declares `sessionId?: string` while
+  // StreamableHTTPClientTransport implements `get sessionId(): string | undefined`,
+  // which is not assignable to the optional `string` without `| undefined`. This
+  // is internal to @modelcontextprotocol/sdk; the runtime behavior is unaffected.
   await client.connect(transport);
   return client;
 }

@@ -1,4 +1,4 @@
-name: Test mcp-accounting
+name: Test mcp-guiri
 
 on:
   pull_request:

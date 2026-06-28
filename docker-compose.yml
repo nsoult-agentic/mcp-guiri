@@ -4,9 +4,16 @@ services:
     container_name: mcp-guiri
     restart: unless-stopped
 
-    # ── Network — host mode for mcp-nextcloud loopback access ──
-    # Binds to 0.0.0.0:8918 in http.ts for LAN access (Lucy's Mac Mini)
-    network_mode: host
+    # ── Network ──
+    # On mcp_network so the NPM proxy (mcp-guiri.stabpablo.eu) resolves this container by
+    # name, and so it can reach mcp-nextcloud by name (see NEXTCLOUD_MCP_URL below).
+    # De-hosted from network_mode:host (#2510): Lucy moved to the proxy in shared-context PR #1,
+    # so the former 0.0.0.0 LAN bind is no longer needed. The app still listens on 0.0.0.0:8918
+    # *inside* the container; the publish below restricts host exposure to loopback.
+    networks:
+      - mcp_network
+    ports:
+      - "127.0.0.1:8918:8918"  # Loopback ONLY — NPM reaches the container by name on mcp_network
 
     # ── Security Hardening ──
     read_only: true
@@ -38,4 +45,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8918
-      - NEXTCLOUD_MCP_URL=http://127.0.0.1:8902/mcp
+      # Reach mcp-nextcloud by container name on mcp_network — was http://127.0.0.1:8902/mcp,
+      # which only worked under network_mode:host (now removed). #2510.
+      - NEXTCLOUD_MCP_URL=http://mcp-nextcloud:8902/mcp
+
+networks:
+  mcp_network:
+    external: true

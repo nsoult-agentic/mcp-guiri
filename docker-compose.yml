@@ -2,6 +2,8 @@ services:
   mcp-guiri:
     image: ghcr.io/nsoult-agentic/mcp-guiri:sha-0343b1a
     container_name: mcp-guiri
+    labels:
+      - "diun.enable=false"  # our own CI/sha-built image; diun watches third-party only (brain #2538)
     restart: unless-stopped
 
     # ── Network ──
